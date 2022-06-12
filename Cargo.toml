@@ -1,0 +1,14 @@
+[package]
+name = "tarkov_project"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.57"
+bincode = { version = "2.0.0-rc" }
+eframe = "0.18.0"
+rayon = "1.5"
+rand = "0.8.5"
+geo = "0.20.1"
+inputbot = "0.5.1"
+external_memory_lib = { path = "../external_memory_lib" }
