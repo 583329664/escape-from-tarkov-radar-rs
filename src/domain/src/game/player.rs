@@ -124,18 +124,18 @@ impl ProceduralWeaponAnimation {
         let empty_byte_slice = vec![0_u8; 0x0];
 
         let breath_reactor = memory.read::<usize>(self.address + 0x28)?;
-        memory.write(breath_reactor + 0xA4, empty_byte_slice.as_ptr().addr());
+        memory.write_ptr(breath_reactor + 0xA4, empty_byte_slice.as_ptr().addr());
 
         let walk_reactor = memory.read::<usize>(self.address + 0x30)?;
-        memory.write(walk_reactor + 0x40, empty_byte_slice.as_ptr().addr());
-        memory.write(walk_reactor + 0x44, empty_byte_slice.as_ptr().addr());
+        memory.write_ptr(walk_reactor + 0x40, empty_byte_slice.as_ptr().addr());
+        memory.write_ptr(walk_reactor + 0x44, empty_byte_slice.as_ptr().addr());
 
         let motion_reactor = memory.read::<usize>(self.address + 0x38)?;
-        memory.write(motion_reactor + 0xD0, empty_byte_slice.as_ptr().addr());
+        memory.write_ptr(motion_reactor + 0xD0, empty_byte_slice.as_ptr().addr());
 
         let shoot_reactor = memory.read::<usize>(self.address + 0x48)?;
-        memory.write(shoot_reactor + 0x40, empty_byte_slice.as_ptr().addr());
-        memory.write(shoot_reactor + 0x48, empty_byte_slice.as_ptr().addr());
+        memory.write_ptr(shoot_reactor + 0x40, empty_byte_slice.as_ptr().addr());
+        memory.write_ptr(shoot_reactor + 0x48, empty_byte_slice.as_ptr().addr());
     
         Ok(())
     }

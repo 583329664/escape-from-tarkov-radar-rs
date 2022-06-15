@@ -51,7 +51,7 @@ impl InternalItem {
     }
 }
 
-enum ItemRarity {
+pub enum ItemRarity {
     NotExist = 0,
     Common = 1,
     Rare = 2,

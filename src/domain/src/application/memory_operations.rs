@@ -1,11 +1,11 @@
-use std::{sync::Arc, collections::HashMap};
+use std::{sync::Arc};
 
 use anyhow::{Result, bail};
 use external_memory_lib::Memory;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
-    domain::{item::Item, player::Player},
+    models::{item::Item, player::Player},
     game::{
         player::InternalPlayer,
         unity::{find_object_in, get_components},
@@ -22,16 +22,9 @@ pub struct GameState {
     game_object_manager: GameObjectManager,
 }
 
-pub struct LocalState {
-    pub players: HashMap<usize, Player>,
-    pub items: HashMap<usize, Item>,
-    pub is_thermal_enabled: bool,
-}
-
 pub struct MemoryOperations {
     memory: Arc<Memory>,
     game_state: GameState,
-    local_state: LocalState,
 }
 
 impl MemoryOperations {
@@ -43,12 +36,7 @@ impl MemoryOperations {
             game_state: GameState {
                 world: world_and_gom.0,
                 game_object_manager: world_and_gom.1,
-            },
-            local_state: LocalState {
-                players: HashMap::new(),
-                items: HashMap::new(),
-                is_thermal_enabled: false
-            },
+            }
         };
 
         Ok(operations)
@@ -56,7 +44,7 @@ impl MemoryOperations {
 }
 
 impl Operations for MemoryOperations {
-    fn toggle_thermal(&mut self) -> Result<()> {
+    fn toggle_thermal(&self, thermal_state: &bool) -> Result<bool> {
         let camera = find_object_in(
             self.game_state.game_object_manager.main_camera_tagged_nodes,
             "FPS Camera",
@@ -72,35 +60,29 @@ impl Operations for MemoryOperations {
             .address;
 
         let pixel_opts = self.memory.read::<usize>(thermal + 0x38)?;
-        self.memory.write_by_type(pixel_opts + 0x20, 1)?;
-        self.memory.write_by_type(pixel_opts + 0x28, 0.0)?;
+        self.memory.write(pixel_opts + 0x20, 1)?;
+        self.memory.write(pixel_opts + 0x28, 0.0)?;
 
         let fps_opts = self.memory.read::<usize>(thermal + 0x20)?;
-        self.memory.write_by_type(fps_opts + 0x14, 144)?;
+        self.memory.write(fps_opts + 0x14, 144)?;
 
-        // apparently multiple writes is required to change the thermal state consistently
-        self.memory.write_by_type(thermal + 0xE0, self.local_state.is_thermal_enabled)?;
-        self.memory.write_by_type(thermal + 0xE0, self.local_state.is_thermal_enabled)?;
-        self.memory.write_by_type(thermal + 0xE0, self.local_state.is_thermal_enabled)?;
-        self.memory.write_by_type(thermal + 0xE0, self.local_state.is_thermal_enabled)?;
-        
-        self.local_state.is_thermal_enabled = !self.local_state.is_thermal_enabled;
+        self.memory.write(thermal + 0xE0, thermal_state)?;
 
-        Ok(())
+        Ok(!thermal_state)
     }
 
-    fn get_players(&mut self) -> Result<Vec<Player>> {
+    fn update_players(&self, old_players: &[Player]) -> Result<Vec<Player>> {
         let player_list = self.memory.read::<usize>(self.game_state.world + 0x88)?;
         let player_list_length = self.memory.read::<i32>(player_list + 0x18)?;
         let player_list_base = self.memory.read::<usize>(player_list + 0x10)? + 0x20;
+        let cached_list_length = old_players.len();
 
-        let players: Vec<(usize, Player)> = match player_list_length as usize {
-            len if len == self.local_state.players.len() => self.local_state.players
-                .clone()
+        match player_list_length as usize {
+            len if len == cached_list_length => old_players
                 .into_par_iter()
-                .map(|(player_ptr, cached_player)| -> Result<(usize, Player)> {
+                .map(|old_player| -> Result<Player> {
                     let player = InternalPlayer {
-                        address: player_ptr,
+                        address: old_player.address,
                     };
 
                     let player_body = player.get_body(&self.memory)?;
@@ -112,18 +94,18 @@ impl Operations for MemoryOperations {
                     let last_aggressor = player.get_last_aggressor(&self.memory)?;
                     let is_dead = player.get_is_dead(&self.memory)?;
 
-                    if cached_player.is_local {
+                    if old_player.is_local {
                         let weapon_animator = player.get_procedural_weapon(&self.memory)?;
                         weapon_animator.zero_out_recoil(&self.memory)?;
                     }
 
-                    let updated_player = Player { location: Vector3::flip(location), direction, last_aggressor, is_dead, ..cached_player };
-                    Ok((player_ptr, updated_player))
+                    let updated_player = Player { location: Vector3::flip(location), direction, last_aggressor, is_dead, ..old_player.clone() };
+                    Ok(updated_player)
                 })
-                .collect::<Result<Vec<_>>>()?,
+                .collect::<Result<Vec<_>>>(),
             _ => (0..player_list_length)
                 .into_par_iter()
-                .map(|i| -> Result<(usize, Player)> {
+                .map(|i| -> Result<Player> {
                     let player_ptr = self
                         .memory
                         .read::<usize>(player_list_base + (i * 0x8) as usize)?;
@@ -152,6 +134,7 @@ impl Operations for MemoryOperations {
 
                     let player = Player {
                         name,
+                        address: player_ptr,
                         id: id.clone(),
                         direction,
                         location: Vector3::flip(location),
@@ -160,26 +143,20 @@ impl Operations for MemoryOperations {
                         is_local: id == LOCAL_ID
                     };
 
-                    Ok((player_ptr, player))
+                    Ok(player)
                 })
-                .collect::<Result<Vec<_>>>()?,
-            };
-
-        players.into_iter().for_each(|(player_ptr, player)| {
-            self.local_state.players.insert(player_ptr, player);
-        });
-
-        Ok(self.local_state.players.values().cloned().collect())
+                .collect::<Result<Vec<_>>>(),
+            }
     }
 
-    fn get_items(&mut self) -> Result<Vec<Item>> {
+    fn update_items(&self, old_items: &[Item]) -> Result<Vec<Item>> {
         let item_list = self.memory.read::<usize>(self.game_state.world + 0x68)?;
         let item_list_length = self.memory.read::<i32>(item_list + 0x18)?;
         let item_list_base = self.memory.read::<usize>(item_list + 0x10)? + 0x20;
 
-        let items = (0..item_list_length)
+        (0..item_list_length)
             .into_par_iter()
-            .map(|i| -> Result<(usize, Item)> {
+            .map(|i| -> Result<Item> {
                 let entity_address = self.memory.read::<usize>(item_list_base + (i * 0x8) as usize)?;
                 let unknown_ptr = self.memory.read::<usize>(entity_address + 0x10)?;
                 let interactive_class = self.memory.read::<usize>(unknown_ptr + 0x28)?;
@@ -202,6 +179,7 @@ impl Operations for MemoryOperations {
                 };
 
                 let item = Item {
+                    address: item_address,
                     name,
                     location,
                     id,
@@ -211,14 +189,8 @@ impl Operations for MemoryOperations {
                     bail!("Found item that is not an item: {}", item.name);
                 };
 
-                Ok((item_address, item))
+                Ok(item)
             })
-            .collect::<Result<Vec<_>>>()?;
-
-        items.into_iter().for_each(|(item_address, item)| {
-            self.local_state.items.insert(item_address, item);
-        });
-        
-        Ok(self.local_state.items.values().cloned().collect())
+            .collect::<Result<Vec<_>>>()
     }
 }

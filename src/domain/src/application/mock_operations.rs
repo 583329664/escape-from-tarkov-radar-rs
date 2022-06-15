@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::{domain::{player::Player, item::Item}, game::maths::Vector3};
+use crate::{models::{player::Player, item::Item}, game::maths::Vector3};
 
 use super::operations::Operations;
 
@@ -26,6 +26,7 @@ impl MockOperations {
             let is_local = i == 0;
 
             let player = Player {
+                address: 0,
                 name,
                 location,
                 direction,
@@ -48,6 +49,7 @@ impl MockOperations {
             let id = "fake ID".to_string();
 
             let item = Item {
+                address: 0,
                 name,
                 id,
                 location,
@@ -61,15 +63,43 @@ impl MockOperations {
 }
 
 impl Operations for MockOperations {
-    fn get_players(&mut self) -> Result<Vec<Player>> {
-        Ok(self.players.clone())
+    fn toggle_thermal(&self, thermal_state: &bool) -> Result<bool> {
+        Ok(!thermal_state)
     }
 
-    fn toggle_thermal(&mut self) -> Result<()> {
-        Ok(())
+    fn update_players(&self, old_players: &[Player]) -> Result<Vec<Player>>{
+        let mut new_players = Vec::new();
+
+        for player in old_players {
+            let location = Vector3::new(
+                player.location.x + rand::random::<f32>() * 10.0,
+                player.location.y + rand::random::<f32>() * 10.0,
+                player.location.z + rand::random::<f32>() * 10.0,
+            );
+
+            let new_player = Player { location, ..player.clone() };
+
+            new_players.push(new_player);
+        }
+
+        Ok(new_players)
     }
 
-    fn get_items(&mut self) -> Result<Vec<Item>> {
-        Ok(self.items.clone())
+    fn update_items(&self, old_items: &[Item]) -> Result<Vec<Item>> {
+        let mut new_items = Vec::new();
+
+        for item in old_items {
+            let location = Vector3::new(
+                item.location.x + rand::random::<f32>() * 10.0,
+                item.location.y + rand::random::<f32>() * 10.0,
+                item.location.z + rand::random::<f32>() * 10.0,
+            );
+
+            let new_item = Item { location, ..item.clone() };
+
+            new_items.push(new_item);
+        }
+
+        Ok(new_items)
     }
 }
