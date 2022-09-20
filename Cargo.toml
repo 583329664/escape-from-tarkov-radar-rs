@@ -4,15 +4,17 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.57"
-inputbot = "0.5.1"
-crossbeam-channel = "0.5"
+anyhow = "1.0.64"
+winapi = "0.3.9"
+crossbeam-channel = "0.5.6"
 external-memory-lib = { path = "../external-memory-lib" }
-view = { path = "./src/view" }
+radar = { path = "./src/radar" }
+esp = { path = "./src/esp" }
 domain = { path = "./src/domain" }
+market = { path = "./src/market" }
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = "0.3.6"
 
 [[bench]]
 name = "player_benchmark"

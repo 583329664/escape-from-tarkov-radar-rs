@@ -1,14 +1,19 @@
-use std::{sync::Arc, time::Duration, thread::sleep};
 use anyhow::Result;
+use esp::esp::Esp;
+use external_memory_lib::utilities::builder::MemoryConfigurer;
+use radar::radar::start_radar;
+use std::{sync::Arc, thread};
 
 use crossbeam_channel::bounded;
-use domain::{application::{memory_operations::MemoryOperations, operations::Operations}, models::player::Player};
-use external_memory_lib::MemoryConfigurer;
-use inputbot::handle_input_events;
-use inputbot::KeybdKey::{*};
-use view::radar;
+use domain::{
+    application::{memory_operations::MemoryOperations, operations::Operations},
+    models::player::Player,
+};
+
+use winapi::um::winuser::GetAsyncKeyState;
 
 fn main() -> Result<()> {
+    // load memory
     let memory = Arc::new(
         MemoryConfigurer::default()
             .configure("EscapeFromTarkov.exe", "UnityPlayer.dll", 0x17FFD28)
@@ -16,12 +21,28 @@ fn main() -> Result<()> {
             .unwrap(),
     );
 
+    // create channels for inproc comms
     let shared_state = Arc::new(MemoryOperations::new(memory).unwrap());
     let (sender, receiver) = bounded(1);
 
-    // player thread
-    let player_state = shared_state.clone();
-    std::thread::spawn(move || {
+    // create async producers
+    player_loop(shared_state.clone(), sender);
+    input_loop(shared_state);
+
+    // create async consumers
+    // start_radar(receiver);
+
+    let esp = Esp::new(receiver);
+    esp.start()?;
+
+    Ok(())
+}
+
+fn player_loop(
+    player_state: Arc<MemoryOperations>,
+    sender: crossbeam_channel::Sender<Vec<Player>>,
+) {
+    thread::spawn(move || {
         let mut players: Vec<Player> = Vec::new();
         loop {
             let new_players_res = player_state.update_players(&players);
@@ -29,33 +50,22 @@ fn main() -> Result<()> {
             if let Ok(new_players) = new_players_res {
                 sender.send(new_players.clone()).unwrap();
                 players = new_players;
+            } else {
+                eprintln!("Error: {:?}", new_players_res);
             }
         }
     });
+}
 
-    // input thread
-    std::thread::spawn(move || {
-        let key_state = shared_state.clone();
-        BackspaceKey.bind(move || {
-            while BackspaceKey.is_pressed() {
-                key_state.toggle_thermal(&true).unwrap();
-                sleep(Duration::from_millis(500));
+fn input_loop(input_state: Arc<MemoryOperations>) {
+    thread::scope(|s| {
+        let mut thermal_toggled = false;
+        input_state.toggle_thermal(&false).unwrap();
+        s.spawn(move || {
+            if unsafe { GetAsyncKeyState(winapi::um::winuser::VK_RETURN) != 0 } {
+                thermal_toggled = input_state.toggle_thermal(&thermal_toggled).unwrap();
+                eprintln!("Thermal toggled: {}", thermal_toggled);
             }
         });
-
-        let other_key_state = shared_state;
-        EnterKey.bind(move || {
-            while EnterKey.is_pressed() {
-                other_key_state.toggle_thermal(&false).unwrap();
-                sleep(Duration::from_millis(500));
-            }
-        });
-
-        handle_input_events();
     });
-
-    // gui thread
-    radar::start_radar(receiver);
-
-    Ok(())
 }

@@ -1,6 +1,12 @@
 use anyhow::Result;
 
-use crate::{models::{player::Player, item::Item}, game::maths::Vector3};
+use crate::{
+    game::maths::Vector3,
+    models::{
+        item::Item,
+        player::{EnemyPlayer, LocalPlayer, Player, PlayerKind, PlayerType},
+    },
+};
 
 use super::operations::Operations;
 
@@ -31,9 +37,21 @@ impl MockOperations {
                 location,
                 direction,
                 id,
-                is_local,
-                is_dead: false,
                 last_aggressor: None,
+                is_aiming: false,
+                player_type: if is_local {
+                    PlayerType::Local
+                } else {
+                    PlayerType::Enemy
+                },
+                kind: if is_local {
+                    PlayerKind::Local(LocalPlayer {
+                        fps_camera: None,
+                        optic_camera: None,
+                    })
+                } else {
+                    PlayerKind::Enemy(EnemyPlayer {})
+                },
             };
 
             players.push(player);
@@ -67,7 +85,7 @@ impl Operations for MockOperations {
         Ok(!thermal_state)
     }
 
-    fn update_players(&self, old_players: &[Player]) -> Result<Vec<Player>>{
+    fn update_players(&self, old_players: &[Player]) -> Result<Vec<Player>> {
         let mut new_players = Vec::new();
 
         for player in old_players {
@@ -77,7 +95,17 @@ impl Operations for MockOperations {
                 player.location.z + rand::random::<f32>() * 10.0,
             );
 
-            let new_player = Player { location, ..player.clone() };
+            let new_player = Player {
+                address: player.address,
+                name: player.name.clone(),
+                location,
+                direction: player.direction,
+                id: player.id.clone(),
+                last_aggressor: player.last_aggressor.clone(),
+                is_aiming: player.is_aiming,
+                kind: player.kind.clone(),
+                player_type: player.player_type.clone(),
+            };
 
             new_players.push(new_player);
         }
@@ -95,7 +123,10 @@ impl Operations for MockOperations {
                 item.location.z + rand::random::<f32>() * 10.0,
             );
 
-            let new_item = Item { location, ..item.clone() };
+            let new_item = Item {
+                location,
+                ..item.clone()
+            };
 
             new_items.push(new_item);
         }

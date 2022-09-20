@@ -1,0 +1,10 @@
+[package]
+name = "esp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.57"
+crossbeam-channel = "0.5"
+domain = { path = "../domain" }
+nvidia-overlay-hook = { path = "../../../nvidia-overlay-hook" }

@@ -1,11 +1,12 @@
-use bincode::Decode;
-use external_memory_lib::Memory;
 use anyhow::Result;
+use external_memory_lib::utilities::memory::Memory;
 
-use super::unity::find_object_in;
+use crate::models::world::WorldState;
+
+use super::unity::find_object;
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Decode)]
+#[derive(Copy, Clone, Debug)]
 pub struct GameObjectManager {
     pub last_tagged_node: usize,
     pub tagged_nodes: usize,
@@ -15,12 +16,18 @@ pub struct GameObjectManager {
     pub active_nodes: usize,
 }
 
-pub fn get_world(memory: &Memory) -> Result<(usize, GameObjectManager)> {
+pub fn get_world_state(memory: &Memory) -> Result<WorldState> {
     let gom_ptr = memory.read::<usize>(memory.base_address)?;
     let gom = memory.read::<GameObjectManager>(gom_ptr)?;
 
-    let world_ptr = find_object_in(gom.active_nodes, "GameWorld", memory)?;
+    let world_ptr = find_object(gom.active_nodes, "GameWorld", memory)?;
     let world = memory.read_sequence(world_ptr, [0x30, 0x18, 0x28].to_vec())?;
 
-    Ok((world, gom))
+    let camera_ptr = find_object(gom.main_camera_tagged_nodes, "FPS Camera", &memory)?;
+
+    Ok(WorldState {
+        world_address: world,
+        gom,
+        fps_camera_address: camera_ptr,
+    })
 }

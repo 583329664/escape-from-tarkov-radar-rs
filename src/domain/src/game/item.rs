@@ -1,10 +1,23 @@
 use anyhow::Result;
+use external_memory_lib::utilities::memory::Memory;
 
-use external_memory_lib::Memory;
+use super::{maths::Vector3, unity::transform_to_world_space};
 
-use super::{unity::transform_to_world_space, maths::Vector3};
-
-pub const BAD_ITEMS: [&str; 13] = ["body", "XXXcap", "Ammo_crate_Cap", "Grenade_box_Door", "Medical_Door", "Toolbox_Door", "card_file_box", "cover_", "lootable", "scontainer_Blue_Barrel_Base_Cap", "scontainer_wood_CAP", "suitcase_plastic_lootable_open", "weapon_box_cover"];
+pub const BAD_ITEMS: [&str; 13] = [
+    "body",
+    "XXXcap",
+    "Ammo_crate_Cap",
+    "Grenade_box_Door",
+    "Medical_Door",
+    "Toolbox_Door",
+    "card_file_box",
+    "cover_",
+    "lootable",
+    "scontainer_Blue_Barrel_Base_Cap",
+    "scontainer_wood_CAP",
+    "suitcase_plastic_lootable_open",
+    "weapon_box_cover",
+];
 
 pub struct InternalItem {
     pub address: usize,
@@ -34,7 +47,7 @@ impl InternalItem {
         Ok(id)
     }
 
-    pub fn get_name(&self, memory: &Memory) -> Result<String> {        
+    pub fn get_name(&self, memory: &Memory) -> Result<String> {
         let ptr = memory.read::<usize>(self.game_object_address + 0x60)?;
         let name = memory.read_string(ptr, 128)?;
 
@@ -55,5 +68,5 @@ pub enum ItemRarity {
     NotExist = 0,
     Common = 1,
     Rare = 2,
-    SuperRare = 3
+    SuperRare = 3,
 }
